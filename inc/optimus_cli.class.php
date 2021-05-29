@@ -6,9 +6,9 @@ defined('ABSPATH') OR exit;
 
 
 /**
-* Optimus WP-CLI
-*
-*/
+ * Optimus WP-CLI
+ *
+ */
 
 class Optimus_CLI extends WP_CLI_Command
 {
@@ -49,6 +49,37 @@ class Optimus_CLI extends WP_CLI_Command
             ),
             'optimize' );
         $formatter->display_items( $assets );
+    }
+
+    /**
+     * webp sync command.
+     *
+     * Checks if all the registered files really have the optimized version.
+     * Note: Only works if convert to webp is enabled.
+     */
+    public static function syncMissingWebp () {
+        $options = Optimus::get_options();
+        if ($options['webp_convert'] == 0) {
+            WP_CLI::error('webp sync command synchronizes the optimization status of attachments with actual files in the filesystem, but the webp feature is not enabled.', TRUE);
+        }
+
+        // Retrieve all post IDs with positive optimization status in database.
+        $posts = Optimus_Management::bulk_optimized_assets();
+
+        foreach ($posts as $key => $post) {
+            $assets = Optimus_Request::get_files_paths($post['ID']);
+            foreach ($assets as $asset_path) {
+                if (stream_resolve_include_path($asset_path) === FALSE) {
+                    $metadata = wp_get_attachment_metadata($post['ID']);
+                    // Remove the optimus metadata when the file does not exist.
+                    unset($metadata['optimus']);
+                    update_post_meta($post['ID'], '_wp_attachment_metadata', $metadata);
+                    // No need to check further files as the whole attachment
+                    // will be re-optimized.
+                    break;
+                }
+            }
+        }
     }
 
     private static function _optimize_image($img) {
@@ -98,6 +129,11 @@ class Optimus_CLI extends WP_CLI_Command
                     'options'       => array( 'table', 'csv', 'json' ),
                 ),
             ),
+        ));
+
+        $cmd_syncmissing = function() { self::syncMissingWebp(); };
+        WP_CLI::add_command( 'optimus webp sync', $cmd_syncmissing, array(
+            'shortdesc' => 'Synchronizes actual webp file optimization status and missing files on disk with database.',
         ));
     }
 }

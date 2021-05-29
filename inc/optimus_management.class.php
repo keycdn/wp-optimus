@@ -14,14 +14,12 @@ defined('ABSPATH') OR exit;
 class Optimus_Management
 {
 
-
     /**
-    * Bulk optimizer media
-    *
-    * @since   1.3.8
-    * @change  1.4.4
-    */
-
+     * Bulk optimizer media
+     *
+     * @since   1.3.8
+     * @change  1.4.4
+     */
     public static function bulk_optimizer_media() {
         check_admin_referer('bulk-media');
 
@@ -38,14 +36,12 @@ class Optimus_Management
         exit();
     }
 
-
     /**
-    * Add bulk optimizer page
-    *
-    * @since   1.3.8
-    * @change  1.3.8
-    */
-
+     * Add bulk optimizer page
+     *
+     * @since   1.3.8
+     * @change  1.3.8
+     */
     public static function add_bulk_optimizer_page()
     {
         /* Management page */
@@ -61,15 +57,10 @@ class Optimus_Management
         );
     }
 
-
     /**
-    * Bulk optimizer collect assets
-    *
-    * @since   1.5.0
-    *
-    */
-
-    public static function bulk_optimizer_assets() {
+     * Prepares all variables to perform DB queries to retrieve optimus data.
+     */
+    private static function _get_optimus_query_variables() {
         global $wpdb;
 
         /* Get plugin options */
@@ -78,7 +69,7 @@ class Optimus_Management
         /* Supported image types */
         $imageTypes = ['jpeg', 'png'];
         foreach ($imageTypes as &$imageType) {
-           $imageType = "$wpdb->posts.post_mime_type = 'image/$imageType'"; 
+           $imageType = "$wpdb->posts.post_mime_type = 'image/$imageType'";
         }
         $queryImageTypes = "(". join(" OR ", $imageTypes) .")";
 
@@ -97,6 +88,20 @@ class Optimus_Management
             $id_query = "";
         }
 
+        return array($queryImageTypes, $optimus_query, $id_query);
+    }
+
+    /**
+     * Bulk optimizer collect assets
+     *
+     * @since   1.5.0
+     *
+     */
+    public static function bulk_optimizer_assets() {
+        global $wpdb;
+
+        list($queryImageTypes, $optimus_query, $id_query) = self::_get_optimus_query_variables();
+
         /* Image query */
         $query = "SELECT $wpdb->posts.ID, $wpdb->posts.post_title, $wpdb->posts.post_mime_type
             FROM $wpdb->posts, $wpdb->postmeta
@@ -112,15 +117,36 @@ class Optimus_Management
         return $wpdb->get_results($query, ARRAY_A);
     }
 
+    /**
+     * Gets all assets registered as already optimized.
+     */
+    public static function bulk_optimized_assets() {
+        global $wpdb;
+
+        list($queryImageTypes, $optimus_query, $id_query) = self::_get_optimus_query_variables();
+
+        /* Image query */
+        $query = "SELECT $wpdb->posts.ID, $wpdb->postmeta.meta_id
+            FROM $wpdb->posts, $wpdb->postmeta
+            WHERE $wpdb->posts.ID = $wpdb->postmeta.post_id
+                AND $wpdb->posts.post_type = 'attachment'
+                AND $wpdb->posts.post_mime_type LIKE 'image/%'
+                AND $queryImageTypes
+                AND $wpdb->postmeta.meta_key = '_wp_attachment_metadata'
+                AND $wpdb->postmeta.meta_value LIKE '$optimus_query'
+            ORDER BY $wpdb->posts.ID DESC";
+
+        return $wpdb->get_results($query, ARRAY_A);
+
+    }
 
     /**
-    * Bulk optimizer page
-    *
-    * @since   1.3.8
-    * @change  1.5.0
-    *
-    */
-
+     * Bulk optimizer page
+     *
+     * @since   1.3.8
+     * @change  1.5.0
+     *
+     */
     public static function bulk_optimizer_page() {
         $assets = self::bulk_optimizer_assets();
         $count = count($assets);
